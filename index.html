@@ -15,6 +15,7 @@
   ====================================================== -->
 <script>
   const CONFIG = {
+    version: 'v1.3',
     modelUrl: './defect.onnx',              // ONNX model path
     labels: ['algae', 'major_crack', 'minor_crack', 'peeling', 'plain', 'spalling', 'stain'],
     inputSize: 512,                         // must match training input size
@@ -352,7 +353,7 @@
 
 <!-- Top bar -->
 <div id="topbar">
-  <div id="logo">Defect · Scan</div>
+  <div id="logo">Defect · Scan <span id="version-tag" style="font-size:9px;opacity:0.5;letter-spacing:.1em"></span></div>
   <div id="fps-counter">-- fps</div>
 </div>
 
@@ -805,13 +806,7 @@ async function testImage(input) {
 
   let probs
   try {
-    const results = await session.run({ input: tensor })
-    const logits = Array.from(results[Object.keys(results)[0]].data)
-    console.log('[testImage] raw logits:', logits.map(v => v.toFixed(4)))
-    const maxL = Math.max(...logits)
-    const exp  = logits.map(x => Math.exp(x - maxL))
-    const sum  = exp.reduce((a, b) => a + b, 0)
-    probs = exp.map(x => x / sum)
+    probs = await runInference(tensor)
     console.log('[testImage] probs:', CONFIG.labels.map((l, i) => `${l}:${(probs[i]*100).toFixed(1)}%`))
   } catch (e) {
     resultEl.textContent = 'Inference failed: ' + e.message
@@ -855,6 +850,7 @@ function closeTest() {
 // ─────────────────────────────────────────────────────────────
 async function boot() {
   initBars()
+  document.getElementById('version-tag').textContent = CONFIG.version
   setLoadingStatus('Requesting camera permission...', 10)
 
   try {
