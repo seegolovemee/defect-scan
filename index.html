@@ -441,12 +441,13 @@ let smoothedProbs = null          // EMA smoothed probabilities
 const EMA_ALPHA = 0.25            // lower = smoother but slower to react
 
 // offscreen canvases for two-step preprocessing (resize then crop, matching PIL)
+// colorSpace:'srgb' forces sRGB on iOS Safari (avoids Display P3 value drift)
 const offscreen = document.createElement('canvas')
 offscreen.width  = CONFIG.inputSize
 offscreen.height = CONFIG.inputSize
-const offCtx = offscreen.getContext('2d')
+const offCtx = offscreen.getContext('2d', { colorSpace: 'srgb', willReadFrequently: true })
 const resizeCanvas = document.createElement('canvas')  // intermediate resize canvas
-const resizeCtx = resizeCanvas.getContext('2d')
+const resizeCtx = resizeCanvas.getContext('2d', { colorSpace: 'srgb' })
 
 const video = document.getElementById('video')
 const gradcamCanvas = document.getElementById('gradcam-canvas')
@@ -571,7 +572,8 @@ async function runInference(tensor) {
     return raw.map(v => v / sum)
   }
   const results = await session.run({ input: tensor })
-  const logits  = Array.from(results.output.data)
+  // use first output key dynamically — avoids silent failure if model names it differently
+  const logits  = Array.from(results[Object.keys(results)[0]].data)
   // softmax
   const maxL = Math.max(...logits)
   const exp  = logits.map(x => Math.exp(x - maxL))
@@ -750,33 +752,46 @@ async function testImage(input) {
 
   if (testObjectURL) { URL.revokeObjectURL(testObjectURL) }
   testObjectURL = URL.createObjectURL(file)
-  imgEl.src = testObjectURL
+  imgEl.src = testObjectURL          // display uses browser auto-rotation (correct for user)
   overlay.style.display = 'flex'
   resultEl.textContent = 'Running inference...'
   barsEl.innerHTML = ''
 
   await new Promise(r => { imgEl.onload = r })
 
-  // resize + center-crop to match camera preprocessing
+  // Use createImageBitmap with imageOrientation:'none' so inference sees raw JPEG bytes —
+  // the same pixel layout PIL.Image.open() returns (no EXIF auto-rotation).
+  // Browser <img> applies EXIF rotation for display, but that would feed the model
+  // differently than Colab/training, causing wrong-class predictions on phone photos.
+  let source
+  try {
+    source = await createImageBitmap(file, { imageOrientation: 'none' })
+  } catch (_) {
+    // Fallback for browsers that don't support imageOrientation option
+    source = imgEl
+  }
+
   const size = CONFIG.inputSize
-  const iw = imgEl.naturalWidth
-  const ih = imgEl.naturalHeight
+  const iw = source.width  || source.naturalWidth
+  const ih = source.height || source.naturalHeight
   const scale = Math.max(size / iw, size / ih)
   const sw = Math.round(iw * scale)
   const sh = Math.round(ih * scale)
   const sx = Math.round((sw - size) / 2)
   const sy = Math.round((sh - size) / 2)
 
-  // Two-step: resize to intermediate (matches PIL's resize), then pixel-exact crop
+  // Two-step: resize → center-crop (matches PIL Resize+CenterCrop)
+  // Explicit sRGB color space to avoid Display P3 pixel drift on iOS Safari
   const resized = document.createElement('canvas')
   resized.width = sw; resized.height = sh
-  resized.getContext('2d').drawImage(imgEl, 0, 0, sw, sh)
+  resized.getContext('2d', { colorSpace: 'srgb' }).drawImage(source, 0, 0, sw, sh)
 
   const crop = document.createElement('canvas')
   crop.width = size; crop.height = size
-  crop.getContext('2d').drawImage(resized, sx, sy, size, size, 0, 0, size, size)
+  const cropCtx = crop.getContext('2d', { colorSpace: 'srgb', willReadFrequently: true })
+  cropCtx.drawImage(resized, sx, sy, size, size, 0, 0, size, size)
 
-  const { data } = crop.getContext('2d').getImageData(0, 0, size, size)
+  const { data } = cropCtx.getImageData(0, 0, size, size)
   const n = size * size
   const float32 = new Float32Array(3 * n)
   const [mr, mg, mb] = CONFIG.mean
@@ -790,11 +805,20 @@ async function testImage(input) {
 
   let probs
   try {
-    probs = await runInference(tensor)
+    const results = await session.run({ input: tensor })
+    const logits = Array.from(results[Object.keys(results)[0]].data)
+    console.log('[testImage] raw logits:', logits.map(v => v.toFixed(4)))
+    const maxL = Math.max(...logits)
+    const exp  = logits.map(x => Math.exp(x - maxL))
+    const sum  = exp.reduce((a, b) => a + b, 0)
+    probs = exp.map(x => x / sum)
+    console.log('[testImage] probs:', CONFIG.labels.map((l, i) => `${l}:${(probs[i]*100).toFixed(1)}%`))
   } catch (e) {
     resultEl.textContent = 'Inference failed: ' + e.message
+    console.error('[testImage] error:', e)
     return
   }
+
   const topIdx = probs.indexOf(Math.max(...probs))
   const conf   = probs[topIdx]
   const isNormal = topIdx === CONFIG.normalClassIndex
@@ -803,7 +827,6 @@ async function testImage(input) {
 
   resultEl.innerHTML = `
     <span style="color:${color}">${CONFIG.labels[topIdx]}</span>
-    <span style="font-size:13px;color:var(--muted);margin-left:8px">${CONFIG.labels[topIdx]}</span>
     <span style="font-size:14px;color:${color};margin-left:8px">${Math.round(conf*100)}%</span>
   `
 
@@ -820,7 +843,6 @@ async function testImage(input) {
       <div style="font-family:var(--mono);font-size:11px;color:var(--muted);width:34px;text-align:right">${Math.round(p*100)}%</div>
     </div>
   `).join('')
-
 }
 
 function closeTest() {
