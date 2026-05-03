@@ -195,7 +195,7 @@
   /* All-class bars */
   #class-bars {
     display: grid;
-    gap: 6px;
+    gap: 8px;
   }
   .bar-row {
     display: flex;
@@ -207,8 +207,11 @@
     font-size: 10px;
     letter-spacing: .08em;
     color: var(--muted);
-    width: 36px;
+    width: 76px;
     flex-shrink: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .bar-track {
     flex: 1;
@@ -434,12 +437,16 @@ let lastFpsTime = performance.now()
 let frameCount = 0
 let lastTopIdx = -1
 let testObjectURL = null
+let smoothedProbs = null          // EMA smoothed probabilities
+const EMA_ALPHA = 0.25            // lower = smoother but slower to react
 
-// offscreen canvas for video frame preprocessing
+// offscreen canvases for two-step preprocessing (resize then crop, matching PIL)
 const offscreen = document.createElement('canvas')
 offscreen.width  = CONFIG.inputSize
 offscreen.height = CONFIG.inputSize
 const offCtx = offscreen.getContext('2d')
+const resizeCanvas = document.createElement('canvas')  // intermediate resize canvas
+const resizeCtx = resizeCanvas.getContext('2d')
 
 const video = document.getElementById('video')
 const gradcamCanvas = document.getElementById('gradcam-canvas')
@@ -531,7 +538,13 @@ function preprocessFrame() {
   const sh = Math.round(vh * scale)
   const sx = Math.round((sw - size) / 2)
   const sy = Math.round((sh - size) / 2)
-  offCtx.drawImage(video, sx / scale, sy / scale, size / scale, size / scale, 0, 0, size, size)
+  // Step 1: resize to intermediate (matches PIL BILINEAR resize)
+  if (resizeCanvas.width !== sw || resizeCanvas.height !== sh) {
+    resizeCanvas.width = sw; resizeCanvas.height = sh
+  }
+  resizeCtx.drawImage(video, 0, 0, sw, sh)
+  // Step 2: pixel-exact center crop (matches PIL crop)
+  offCtx.drawImage(resizeCanvas, sx, sy, size, size, 0, 0, size, size)
   const { data } = offCtx.getImageData(0, 0, size, size)  // RGBA, HWC
 
   // convert RGBA HWC → CHW Float32 with ImageNet normalization
@@ -676,7 +689,14 @@ async function inferenceLoop() {
   const tensor = preprocessFrame()
 
   try {
-    const probs = await runInference(tensor)
+    const rawProbs = await runInference(tensor)
+    // EMA smoothing to dampen per-frame camera noise
+    if (!smoothedProbs) {
+      smoothedProbs = rawProbs.slice()
+    } else {
+      smoothedProbs = smoothedProbs.map((v, i) => v * (1 - EMA_ALPHA) + rawProbs[i] * EMA_ALPHA)
+    }
+    const probs = smoothedProbs
     const { topIdx } = updateUI(probs)
 
     if (showGradcam && (topIdx !== lastTopIdx || Math.random() < 0.05)) {
@@ -710,7 +730,7 @@ function togglePause() {
   document.getElementById('btn-pause').classList.toggle('active', isPaused)
   document.getElementById('scan-line').style.animationPlayState =
     isPaused ? 'paused' : 'running'
-  if (!isPaused) requestAnimationFrame(inferenceLoop)
+  if (!isPaused) { smoothedProbs = null; requestAnimationFrame(inferenceLoop) }
 }
 
 
@@ -747,9 +767,14 @@ async function testImage(input) {
   const sx = Math.round((sw - size) / 2)
   const sy = Math.round((sh - size) / 2)
 
+  // Two-step: resize to intermediate (matches PIL's resize), then pixel-exact crop
+  const resized = document.createElement('canvas')
+  resized.width = sw; resized.height = sh
+  resized.getContext('2d').drawImage(imgEl, 0, 0, sw, sh)
+
   const crop = document.createElement('canvas')
   crop.width = size; crop.height = size
-  crop.getContext('2d').drawImage(imgEl, sx / scale, sy / scale, size / scale, size / scale, 0, 0, size, size)
+  crop.getContext('2d').drawImage(resized, sx, sy, size, size, 0, 0, size, size)
 
   const { data } = crop.getContext('2d').getImageData(0, 0, size, size)
   const n = size * size
