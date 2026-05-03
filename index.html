@@ -17,6 +17,7 @@
   const CONFIG = {
     version: 'v1.4',
     modelUrl: './defect.onnx',              // ONNX model path
+    modelDataUrl: './defect.onnx.data',     // external weights (must be served alongside)
     labels: ['algae', 'major_crack', 'minor_crack', 'peeling', 'plain', 'spalling', 'stain'],
     inputSize: 512,                         // must match training input size
     mean: [0.485, 0.456, 0.406],
@@ -494,6 +495,9 @@ async function loadModel() {
     setLoadingStatus('Loading model...', 30)
     const sess = await ort.InferenceSession.create(CONFIG.modelUrl, {
       executionProviders: ['wasm'],           // WASM is more consistent than WebGL on mobile
+      externalData: [
+        { path: 'defect.onnx.data', data: CONFIG.modelDataUrl }
+      ],
     })
     setLoadingStatus('Warming up...', 70)
     // warm-up run to eliminate first-frame latency spike
