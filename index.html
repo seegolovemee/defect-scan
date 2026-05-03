@@ -498,20 +498,32 @@ async function startCamera() {
 //  Preprocess: video frame → normalized tensor
 // ─────────────────────────────────────────────────────────────
 function preprocessFrame() {
-  const size = CONFIG.inputSize
-  // 把视频帧画到离屏 canvas 并 resize
-  offCtx.drawImage(video, 0, 0, size, size)
-  const { data } = offCtx.getImageData(0, 0, size, size)  // RGBA, HWC
+  const size = CONFIG.inputSize  // 512
 
-  // 转成 CHW Float32 并做 ImageNet 归一化
+  // 先按短边 resize，再中心裁剪（和训练的 Resize+CenterCrop 一致）
+  const vw = video.videoWidth
+  const vh = video.videoHeight
+  const scale = Math.max(size / vw, size / vh)
+  const sw = Math.round(vw * scale)
+  const sh = Math.round(vh * scale)
+  const sx = Math.round((sw - size) / 2)
+  const sy = Math.round((sh - size) / 2)
+
+  // 先画到足够大，再从中心裁 512x512
+  const tmp = document.createElement('canvas')
+  tmp.width = sw; tmp.height = sh
+  tmp.getContext('2d').drawImage(video, 0, 0, sw, sh)
+  offCtx.drawImage(tmp, sx, sy, size, size, 0, 0, size, size)
+
+  const { data } = offCtx.getImageData(0, 0, size, size)
   const n = size * size
   const float32 = new Float32Array(3 * n)
   const [mr, mg, mb] = CONFIG.mean
   const [sr, sg, sb] = CONFIG.std
   for (let i = 0; i < n; i++) {
-    float32[i]         = (data[i * 4]     / 255 - mr) / sr  // R
-    float32[i + n]     = (data[i * 4 + 1] / 255 - mg) / sg  // G
-    float32[i + n * 2] = (data[i * 4 + 2] / 255 - mb) / sb  // B
+    float32[i]         = (data[i * 4]     / 255 - mr) / sr
+    float32[i + n]     = (data[i * 4 + 1] / 255 - mg) / sg
+    float32[i + n * 2] = (data[i * 4 + 2] / 255 - mb) / sb
   }
   return new ort.Tensor('float32', float32, [1, 3, size, size])
 }
