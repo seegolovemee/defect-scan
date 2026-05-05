@@ -16,8 +16,8 @@
 <script>
   const CONFIG = {
     version: 'v1.4',
-    modelUrl: './BD3_mobilenetv3small_20260504_133748_acc0.8970.onnx',
-    modelDataUrl: './BD3_mobilenetv3small_20260504_133748_acc0.8970.onnx.data',
+    modelUrl: './mobilenetv3small.onnx',
+    modelDataUrl: './mobilenetv3small.onnx.data',
     labels: ['algae', 'major_crack', 'minor_crack', 'peeling', 'plain', 'spalling', 'stain'],
     inputSize: 512,                         // must match training input size
     mean: [0.485, 0.456, 0.406],
@@ -496,7 +496,7 @@ async function loadModel() {
     const sess = await ort.InferenceSession.create(CONFIG.modelUrl, {
       executionProviders: ['wasm'],           // WASM is more consistent than WebGL on mobile
       externalData: [
-        { path: 'BD3_mobilenetv3small_20260504_133748_acc0.8970.onnx.data', data: CONFIG.modelDataUrl }
+        { path: 'mobilenetv3small.onnx.data', data: CONFIG.modelDataUrl }
       ],
     })
     setLoadingStatus('Warming up...', 70)
