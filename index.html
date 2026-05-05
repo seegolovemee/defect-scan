@@ -15,14 +15,17 @@
   ====================================================== -->
 <script>
   const CONFIG = {
-    version: 'v1.4',
+    version: 'v1.5',
     modelUrl: './mobilenetv3small.onnx',
     modelDataUrl: './mobilenetv3small.onnx.data',
     labels: ['algae', 'major_crack', 'minor_crack', 'peeling', 'plain', 'spalling', 'stain'],
     inputSize: 512,                         // must match training input size
     mean: [0.485, 0.456, 0.406],
     std:  [0.229, 0.224, 0.225],
-    confidenceThreshold: 0.5,
+    // OE-calibrated MSP threshold: set this to threshold95 from your OE training notebook
+    // (the 5th-percentile MSP on your in-distribution validation set after OE training).
+    // Any frame with max-softmax-prob below this value is rejected as out-of-scope.
+    mspThreshold: 0.545,
     normalClassIndex: 4,                    // plain = 4
     severeClasses: [1, 5],                  // major_crack, spalling
     demoMode: false,                        // set true to use random outputs instead of the model
@@ -309,21 +312,26 @@
   }
 
   /* ── Status states (color themes) ─────────────────────── */
-  body.state-normal  #class-label { color: var(--green); }
-  body.state-defect  #class-label { color: var(--red); }
-  body.state-warn    #class-label { color: var(--amber); }
-  body.state-normal  #conf-badge  { border-color: var(--green); color: var(--green); }
-  body.state-defect  #conf-badge  { border-color: var(--red); color: var(--red); }
-  body.state-warn    #conf-badge  { border-color: var(--amber); color: var(--amber); }
-  body.state-normal  #conf-fill   { background: var(--green); }
-  body.state-defect  #conf-fill   { background: var(--red); }
-  body.state-warn    #conf-fill   { background: var(--amber); }
-  body.state-normal  .corner { border-color: var(--green); }
-  body.state-defect  .corner { border-color: var(--red); }
-  body.state-warn    .corner { border-color: var(--amber); }
-  body.state-normal  .bar-fill.top { background: var(--green) !important; }
-  body.state-defect  .bar-fill.top { background: var(--red) !important; }
-  body.state-warn    .bar-fill.top { background: var(--amber) !important; }
+  body.state-normal    #class-label { color: var(--green); }
+  body.state-defect    #class-label { color: var(--red); }
+  body.state-warn      #class-label { color: var(--amber); }
+  body.state-uncertain #class-label { color: var(--muted); }
+  body.state-normal    #conf-badge  { border-color: var(--green); color: var(--green); }
+  body.state-defect    #conf-badge  { border-color: var(--red); color: var(--red); }
+  body.state-warn      #conf-badge  { border-color: var(--amber); color: var(--amber); }
+  body.state-uncertain #conf-badge  { border-color: var(--muted); color: var(--muted); }
+  body.state-normal    #conf-fill   { background: var(--green); }
+  body.state-defect    #conf-fill   { background: var(--red); }
+  body.state-warn      #conf-fill   { background: var(--amber); }
+  body.state-uncertain #conf-fill   { background: var(--muted); }
+  body.state-normal    .corner { border-color: var(--green); }
+  body.state-defect    .corner { border-color: var(--red); }
+  body.state-warn      .corner { border-color: var(--amber); }
+  body.state-uncertain .corner { border-color: var(--muted); }
+  body.state-normal    .bar-fill.top { background: var(--green) !important; }
+  body.state-defect    .bar-fill.top { background: var(--red) !important; }
+  body.state-warn      .bar-fill.top { background: var(--amber) !important; }
+  body.state-uncertain .bar-fill.top { background: var(--muted) !important; }
 </style>
 </head>
 <body>
@@ -641,23 +649,24 @@ function drawDemoHeatmap() {
 // ─────────────────────────────────────────────────────────────
 function updateUI(probs) {
   const topIdx   = probs.indexOf(Math.max(...probs))
-  const conf     = probs[topIdx]
+  const conf     = probs[topIdx]   // Maximum Softmax Probability (MSP)
+  const rejected = conf < CONFIG.mspThreshold   // OE rejection gate
   const isNormal = topIdx === CONFIG.normalClassIndex
   const isSevere = CONFIG.severeClasses.includes(topIdx)
   const label = CONFIG.labels[topIdx]
 
   document.getElementById('class-label').textContent =
-    conf < CONFIG.confidenceThreshold ? '--' : label
+    rejected ? 'out of scope' : label
   document.getElementById('conf-badge').textContent =
     Math.round(conf * 100) + '%'
   document.getElementById('conf-fill').style.width =
     Math.round(conf * 100) + '%'
 
-  // Body state: normal / warn (minor defect) / defect (severe)
+  // Body state: rejected → uncertain; else normal / warn / defect
   document.body.className =
-    conf < CONFIG.confidenceThreshold ? '' :
-    isNormal ? 'state-normal' :
-    isSevere ? 'state-defect' : 'state-warn'
+    rejected  ? 'state-uncertain' :
+    isNormal  ? 'state-normal' :
+    isSevere  ? 'state-defect' : 'state-warn'
 
   // Per-class bars (show CN name)
   probs.forEach((p, i) => {
@@ -833,15 +842,19 @@ async function testImage(input) {
     return
   }
 
-  const topIdx = probs.indexOf(Math.max(...probs))
-  const conf   = probs[topIdx]
+  const topIdx   = probs.indexOf(Math.max(...probs))
+  const conf     = probs[topIdx]   // MSP
+  const rejected = conf < CONFIG.mspThreshold
   const isNormal = topIdx === CONFIG.normalClassIndex
   const isSevere = CONFIG.severeClasses.includes(topIdx)
-  const color = isNormal ? 'var(--green)' : isSevere ? 'var(--red)' : 'var(--amber)'
+  const color = rejected ? 'var(--muted)' :
+    isNormal ? 'var(--green)' : isSevere ? 'var(--red)' : 'var(--amber)'
+  const displayLabel = rejected ? 'out of scope' : CONFIG.labels[topIdx]
 
   resultEl.innerHTML = `
-    <span style="color:${color}">${CONFIG.labels[topIdx]}</span>
+    <span style="color:${color}">${displayLabel}</span>
     <span style="font-size:14px;color:${color};margin-left:8px">${Math.round(conf*100)}%</span>
+    ${rejected ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;letter-spacing:.05em">MSP ${Math.round(conf*100)}% &lt; threshold ${Math.round(CONFIG.mspThreshold*100)}%</div>` : ''}
   `
 
   const sorted = probs
