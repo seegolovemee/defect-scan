@@ -45,9 +45,9 @@
       // python export_cam.py --arch resnet50 \
       //     --weights resnet50.pth \
       //     --output model/resnet50_cam.onnx
-      camModelUrl:  null,   // 填入: './model/resnet50_cam.onnx'
-      camDataUrl:   null,
-      camDataFile:  null,
+      camModelUrl:  './model/resnet50_cam.onnx',
+      camDataUrl:  './model/resnet50_cam.onnx.data',
+      camDataFile:  'resnet50_cam.onnx.data',
       labels: ['algae', 'major_crack', 'minor_crack', 'peeling', 'plain', 'spalling', 'stain'],
       inputSize: 512,
       mean: [0.485, 0.456, 0.406],
@@ -62,9 +62,9 @@
       modelUrl: './model/yolo26s.onnx',
       modelDataUrl: './model/yolo26s.onnx.data',
       modelDataFile: 'BD3_yolo26s_cls_20260508_084911_acc0.9447.onnx.data',
-      camModelUrl:  null,
-      camDataUrl:   null,
-      camDataFile:  null,
+      camModelUrl:  './model/yolo26s_cam.onnx',
+      camDataUrl:   './model/yolo26s_cam.onnx.data',
+      camDataFile:  'yolo26s_cam.onnx.data',
       labels: ['algae', 'major_crack', 'minor_crack', 'peeling', 'plain', 'spalling', 'stain'],
       inputSize: 512,
       mean: [0.485, 0.456, 0.406],
