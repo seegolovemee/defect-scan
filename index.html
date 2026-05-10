@@ -21,11 +21,13 @@
       modelUrl: './model/mobilenetv3small.onnx',
       modelDataUrl: './model/mobilenetv3small.onnx.data',
       modelDataFile: 'mobilenetv3small.onnx.data',
-      // Set camModelUrl after running the Python CAM export script.
-      // Leave null to disable the Grad-CAM toggle for this model.
-      camModelUrl:  null,   // e.g. './model/mobilenetv3small_cam.onnx'
-      camDataUrl:   null,   // e.g. './model/mobilenetv3small_cam.onnx.data'
-      camDataFile:  null,   // e.g. 'mobilenetv3small_cam.onnx.data'
+      // 运行 export_cam.py 后填写以下三个字段，HEAT 按钮即可使用：
+      //   python export_cam.py --arch mobilenet_v3_small \
+      //       --weights mobilenetv3small.pth \
+      //       --output model/mobilenetv3small_cam.onnx
+      camModelUrl:  './model/mobilenetv3small_cam.onnx',
+      camDataUrl:   './model/mobilenetv3small_cam.onnx.data',
+      camDataFile:  'mobilenetv3small_cam.onnx.data',
       labels: ['algae', 'major_crack', 'minor_crack', 'peeling', 'plain', 'spalling', 'stain'],
       inputSize: 512,
       mean: [0.485, 0.456, 0.406],
@@ -40,7 +42,10 @@
       modelUrl: './model/resnet50.onnx',
       modelDataUrl: './model/resnet50.onnx.data',
       modelDataFile: 'BD3_resnet50_20260508_081416_acc0.9497.onnx.data',
-      camModelUrl:  null,
+      // python export_cam.py --arch resnet50 \
+      //     --weights resnet50.pth \
+      //     --output model/resnet50_cam.onnx
+      camModelUrl:  null,   // 填入: './model/resnet50_cam.onnx'
       camDataUrl:   null,
       camDataFile:  null,
       labels: ['algae', 'major_crack', 'minor_crack', 'peeling', 'plain', 'spalling', 'stain'],
