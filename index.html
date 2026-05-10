@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#0a0a0a">
+<meta name="theme-color" content="#06090f">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,40 +14,85 @@
   Config — edit only this block
   ====================================================== -->
 <script>
+  const MODELS = [
+    {
+      key: 'mobilenetv3small',
+      name: 'MobileNetV3-Small',
+      modelUrl: './model/mobilenetv3small.onnx',
+      modelDataUrl: './model/mobilenetv3small.onnx.data',
+      modelDataFile: 'mobilenetv3small.onnx.data',
+      // Set camModelUrl after running the Python CAM export script.
+      // Leave null to disable the Grad-CAM toggle for this model.
+      camModelUrl:  null,   // e.g. './model/mobilenetv3small_cam.onnx'
+      camDataUrl:   null,   // e.g. './model/mobilenetv3small_cam.onnx.data'
+      camDataFile:  null,   // e.g. 'mobilenetv3small_cam.onnx.data'
+      labels: ['algae', 'major_crack', 'minor_crack', 'peeling', 'plain', 'spalling', 'stain'],
+      inputSize: 512,
+      mean: [0.485, 0.456, 0.406],
+      std:  [0.229, 0.224, 0.225],
+      mspThreshold: 0.545,
+      normalClassIndex: 4,
+      severeClasses: [1, 5],
+    },
+    {
+      key: 'resnet50',
+      name: 'ResNet-50',
+      modelUrl: './model/resnet50.onnx',
+      modelDataUrl: './model/resnet50.onnx.data',
+      modelDataFile: 'resnet50.onnx.data',
+      camModelUrl:  null,
+      camDataUrl:   null,
+      camDataFile:  null,
+      labels: ['algae', 'major_crack', 'minor_crack', 'peeling', 'plain', 'spalling', 'stain'],
+      inputSize: 512,
+      mean: [0.485, 0.456, 0.406],
+      std:  [0.229, 0.224, 0.225],
+      mspThreshold: 0.545,
+      normalClassIndex: 4,
+      severeClasses: [1, 5],
+    },
+    {
+      key: 'yolo26s',
+      name: 'YOLO26s',
+      modelUrl: './model/yolo26s.onnx',
+      modelDataUrl: './model/yolo26s.onnx.data',
+      modelDataFile: 'yolo26s.onnx.data',
+      camModelUrl:  null,
+      camDataUrl:   null,
+      camDataFile:  null,
+      labels: ['algae', 'major_crack', 'minor_crack', 'peeling', 'plain', 'spalling', 'stain'],
+      inputSize: 512,
+      mean: [0.485, 0.456, 0.406],
+      std:  [0.229, 0.224, 0.225],
+      mspThreshold: 0.545,
+      normalClassIndex: 4,
+      severeClasses: [1, 5],
+    },
+  ]
+
   const CONFIG = {
-    version: 'v1.5',
-    modelUrl: './mobilenetv3small.onnx',
-    modelDataUrl: './mobilenetv3small.onnx.data',
-    labels: ['algae', 'major_crack', 'minor_crack', 'peeling', 'plain', 'spalling', 'stain'],
-    inputSize: 512,                         // must match training input size
-    mean: [0.485, 0.456, 0.406],
-    std:  [0.229, 0.224, 0.225],
-    // OE-calibrated MSP threshold: set this to threshold95 from your OE training notebook
-    // (the 5th-percentile MSP on your in-distribution validation set after OE training).
-    // Any frame with max-softmax-prob below this value is rejected as out-of-scope.
-    mspThreshold: 0.545,
-    normalClassIndex: 4,                    // plain = 4
-    severeClasses: [1, 5],                  // major_crack, spalling
-    demoMode: false,                        // set true to use random outputs instead of the model
+    version: 'v1.6',
+    ...MODELS[0],
+    demoMode: false,
   }
 </script>
 
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Space+Grotesk:wght@300;400;500;600&display=swap');
 
   :root {
-    --bg: #0a0a0a;
-    --surface: #111111;
-    --border: #222222;
-    --text: #e8e8e0;
-    --muted: #555550;
-    --accent: #ff6b35;
-    --green: #39d353;
-    --amber: #f0a500;
-    --red: #ff4444;
-    --blue: #4488ff;
+    --bg:         #06090f;
+    --border:     #131f2e;
+    --border-hi:  #1c3048;
+    --text:       #c9d6e3;
+    --muted:      #445566;
+    --accent:     #00c8ff;
+    --accent-dim: rgba(0,200,255,.08);
+    --green:      #00e676;
+    --amber:      #ffca28;
+    --red:        #ff5252;
     --mono: 'Share Tech Mono', monospace;
-    --sans: 'Barlow', sans-serif;
+    --sans: 'Space Grotesk', sans-serif;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -61,10 +106,9 @@
     user-select: none;
   }
 
-  /* ── Camera layer ─────────────────────────────────── */
+  /* ── Camera ──────────────────────────────────────────── */
   #camera-wrap {
     position: fixed; inset: 0;
-    display: flex; align-items: center; justify-content: center;
     background: #000;
   }
   #video {
@@ -73,41 +117,107 @@
     display: block;
   }
 
-  /* ── Scan overlay (corner brackets) ─────────────────── */
+  /* ── Ambient glow vignette ───────────────────────────── */
+  #vignette {
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 90% 50% at 50% 110%, rgba(0,200,255,.06) 0%, transparent 65%),
+      radial-gradient(ellipse 70% 40% at 50% -10%, rgba(0,200,255,.04) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* ── Scan frame ──────────────────────────────────────── */
   #scan-frame {
     position: fixed;
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    width: min(70vw, 280px);
-    height: min(70vw, 280px);
+    width: min(72vw, 290px);
+    height: min(72vw, 290px);
     pointer-events: none;
-    transition: border-color .3s;
+    z-index: 5;
   }
+
   .corner {
     position: absolute;
-    width: 20px; height: 20px;
+    width: 26px; height: 26px;
     border-color: var(--accent);
     border-style: solid;
-    opacity: 0.8;
-    transition: opacity .3s, border-color .3s;
+    opacity: 0.85;
+    transition: border-color .4s, opacity .4s;
   }
   .corner.tl { top: 0; left: 0; border-width: 2px 0 0 2px; }
   .corner.tr { top: 0; right: 0; border-width: 2px 2px 0 0; }
   .corner.bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
   .corner.br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
 
-  /* Scan line animation */
+  /* Corner terminal dots */
+  .corner::after {
+    content: '';
+    position: absolute;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    transition: background .4s;
+  }
+  .corner.tl::after { top: -2px; left: -2px; }
+  .corner.tr::after { top: -2px; right: -2px; }
+  .corner.bl::after { bottom: -2px; left: -2px; }
+  .corner.br::after { bottom: -2px; right: -2px; }
+
+  /* Mid-edge tick marks */
+  .frame-tick {
+    position: absolute;
+    background: var(--accent);
+    opacity: 0.22;
+    transition: background .4s, opacity .4s;
+  }
+  .tick-top, .tick-bottom {
+    width: 1px; height: 7px;
+    left: 50%; transform: translateX(-50%);
+  }
+  .tick-left, .tick-right {
+    height: 1px; width: 7px;
+    top: 50%; transform: translateY(-50%);
+  }
+  .tick-top    { top: 0; }
+  .tick-bottom { bottom: 0; }
+  .tick-left   { left: 0; }
+  .tick-right  { right: 0; }
+
+  /* Crosshair center dot */
+  #crosshair {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0.45;
+    box-shadow: 0 0 8px var(--accent);
+    transition: background .4s, box-shadow .4s;
+  }
+
+  /* Scan line */
   #scan-line {
     position: absolute;
-    left: 4px; right: 4px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    animation: scan 2s ease-in-out infinite;
-    opacity: 0.6;
+    left: 2px; right: 2px;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(0,200,255,.4) 15%,
+      var(--accent) 40%,
+      rgba(255,255,255,.95) 50%,
+      var(--accent) 60%,
+      rgba(0,200,255,.4) 85%,
+      transparent 100%);
+    box-shadow: 0 0 10px 2px rgba(0,200,255,.35);
+    animation: scan 2.4s ease-in-out infinite;
+    opacity: 0.75;
   }
   @keyframes scan {
-    0% { top: 4px; }
-    100% { top: calc(100% - 4px); }
+    0%   { top: 2px; }
+    100% { top: calc(100% - 2px); }
   }
 
   /* ── Grad-CAM canvas ─────────────────────────────────── */
@@ -115,133 +225,246 @@
     position: fixed;
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    width: min(70vw, 280px);
-    height: min(70vw, 280px);
+    width: min(72vw, 290px);
+    height: min(72vw, 290px);
     opacity: 0;
-    border-radius: 2px;
     pointer-events: none;
     transition: opacity .4s;
+    z-index: 4;
   }
-  #gradcam-canvas.visible { opacity: 0.65; }
+  #gradcam-canvas.visible { opacity: 0.6; }
 
-  /* ── Top bar ─────────────────────────────────── */
+  /* ── Top bar ─────────────────────────────────────────── */
   #topbar {
     position: fixed;
     top: 0; left: 0; right: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: env(safe-area-inset-top, 12px) 16px 12px;
-    background: linear-gradient(180deg, rgba(0,0,0,.7) 0%, transparent 100%);
+    padding: env(safe-area-inset-top, 14px) 18px 14px;
+    background: linear-gradient(180deg, rgba(6,9,15,.9) 0%, transparent 100%);
+    z-index: 10;
   }
+
   #logo {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .logo-mark {
+    width: 22px; height: 22px;
+    border: 1.5px solid var(--accent);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,200,255,.07);
+    flex-shrink: 0;
+  }
+  .logo-mark svg { opacity: .8; }
+  .logo-text {
     font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: .15em;
+    font-size: 11px;
+    letter-spacing: .22em;
     color: var(--accent);
     text-transform: uppercase;
+    line-height: 1;
+  }
+  #version-tag {
+    font-size: 8px;
+    opacity: 0.35;
+    letter-spacing: .06em;
+    display: block;
+    margin-top: 2px;
+  }
+
+  #topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  #model-badge {
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: .1em;
+    color: var(--muted);
+    border: 1px solid var(--border-hi);
+    border-radius: 3px;
+    padding: 2px 6px;
+    text-transform: uppercase;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  #status-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background .4s, box-shadow .4s;
   }
   #fps-counter {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 10px;
     color: var(--muted);
-    letter-spacing: .08em;
+    letter-spacing: .05em;
+    min-width: 42px;
+    text-align: right;
   }
 
-  /* ── Result card (bottom) ─────────────────────────────────── */
+  /* ── Result card ─────────────────────────────────────── */
   #result-card {
     position: fixed;
     bottom: 0; left: 0; right: 0;
-    padding: 20px 20px calc(env(safe-area-inset-bottom, 0px) + 20px);
-    background: linear-gradient(0deg, rgba(0,0,0,.85) 0%, rgba(0,0,0,.6) 70%, transparent 100%);
-    }
+    padding: 0 18px calc(env(safe-area-inset-bottom, 0px) + 20px);
+    background: linear-gradient(0deg,
+      rgba(6,9,15,.97) 0%,
+      rgba(6,9,15,.88) 55%,
+      transparent 100%);
+    z-index: 10;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-top: 20px;
+    margin-bottom: 14px;
+  }
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: .24em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .panel-divider {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--border-hi) 0%, transparent 100%);
+  }
+  #panel-status {
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: .18em;
+    color: var(--muted);
+    transition: color .35s;
+  }
 
   #label-row {
     display: flex;
-    align-items: baseline;
-    gap: 10px;
-    margin-bottom: 10px;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
   }
   #class-label {
     font-family: var(--mono);
-    font-size: 26px;
-    font-weight: 400;
-    letter-spacing: .05em;
+    font-size: 28px;
+    letter-spacing: .04em;
     color: var(--text);
-    transition: color .2s;
+    transition: color .25s;
+    line-height: 1;
   }
   #conf-badge {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 11px;
     padding: 3px 8px;
-    border-radius: 2px;
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    letter-spacing: .08em;
-    transition: border-color .2s, color .2s;
+    border-radius: 3px;
+    border: 1px solid var(--muted);
+    color: var(--muted);
+    letter-spacing: .1em;
+    transition: border-color .25s, color .25s, background .25s;
   }
 
   /* Confidence bar */
-  #conf-track {
-    height: 2px;
+  .conf-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .conf-meta-label {
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: .16em;
+    color: var(--muted);
+  }
+  .conf-meta-ticks {
+    font-family: var(--mono);
+    font-size: 7px;
+    color: var(--border-hi);
+    letter-spacing: .04em;
+    display: flex;
+    gap: 6px;
+  }
+
+  #conf-wrap {
+    position: relative;
+    height: 3px;
     background: var(--border);
     border-radius: 1px;
     margin-bottom: 16px;
-    overflow: hidden;
+    overflow: visible;
   }
   #conf-fill {
     height: 100%;
     border-radius: 1px;
     background: var(--accent);
     width: 0%;
-    transition: width .15s ease-out, background .2s;
+    transition: width .15s ease-out, background .25s;
+  }
+  .conf-notch {
+    position: absolute;
+    top: -4px; bottom: -4px;
+    width: 1px;
+    background: var(--border-hi);
+    pointer-events: none;
   }
 
-  /* All-class bars */
-  #class-bars {
-    display: grid;
-    gap: 8px;
-  }
-  .bar-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+  /* Class bars */
+  #class-bars { display: grid; gap: 7px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; }
   .bar-name {
     font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: .08em;
+    font-size: 9px;
+    letter-spacing: .07em;
     color: var(--muted);
-    width: 76px;
+    width: 80px;
     flex-shrink: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    text-transform: uppercase;
   }
   .bar-track {
     flex: 1;
     height: 3px;
     background: var(--border);
-    border-radius: 2px;
+    border-radius: 1px;
     overflow: hidden;
   }
   .bar-fill {
     height: 100%;
-    border-radius: 2px;
-    background: var(--muted);
+    border-radius: 1px;
+    background: var(--border-hi);
     width: 0%;
-    transition: width .15s ease-out, background .2s;
+    transition: width .15s ease-out, background .25s;
   }
   .bar-fill.top { background: var(--accent); }
   .bar-val {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 9px;
     color: var(--muted);
-    width: 32px;
+    width: 30px;
     text-align: right;
   }
 
-  /* ── Action buttons ─────────────────────────────────── */
+  /* ── Action buttons ──────────────────────────────────── */
   #actions {
     position: fixed;
     right: 16px;
@@ -249,30 +472,43 @@
     transform: translateY(-50%);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
+    z-index: 10;
   }
   .action-btn {
-    width: 44px; height: 44px;
-    border-radius: 50%;
-    border: 1px solid var(--border);
-    background: rgba(10,10,10,.7);
+    width: 46px; height: 46px;
+    border-radius: 10px;
+    border: 1px solid var(--border-hi);
+    background: rgba(13,21,32,.82);
     color: var(--muted);
     cursor: pointer;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
-    transition: border-color .2s, color .2s, background .2s;
-    backdrop-filter: blur(8px);
+    gap: 4px;
+    transition: border-color .2s, color .2s, background .2s, box-shadow .2s;
+    backdrop-filter: blur(14px);
   }
-  .action-btn:active { transform: scale(.93); }
+  .action-btn:active { transform: scale(.91); }
+  .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .action-btn.cam-loading svg { animation: btn-spin 1s linear infinite; }
+  @keyframes btn-spin { to { transform: rotate(360deg); } }
+  .action-btn.cam-unavailable { opacity: 0.4; cursor: not-allowed; }
   .action-btn.active {
     border-color: var(--accent);
     color: var(--accent);
-    background: rgba(255,107,53,.1);
+    background: var(--accent-dim);
+    box-shadow: 0 0 12px rgba(0,200,255,.18), inset 0 0 10px rgba(0,200,255,.06);
+  }
+  .btn-label {
+    font-family: var(--mono);
+    font-size: 6.5px;
+    letter-spacing: .08em;
+    line-height: 1;
   }
 
-  /* ── Loading screen ─────────────────────────────────── */
+  /* ── Loading screen ──────────────────────────────────── */
   #loading {
     position: fixed; inset: 0;
     background: var(--bg);
@@ -280,65 +516,291 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 20px;
+    gap: 22px;
     z-index: 100;
-    transition: opacity .5s;
+    transition: opacity .6s;
+  }
+  #loading::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,200,255,.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,200,255,.025) 1px, transparent 1px);
+    background-size: 44px 44px;
+    pointer-events: none;
+  }
+  #loading::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 40%, var(--bg) 100%);
+    pointer-events: none;
   }
   #loading.hidden { opacity: 0; pointer-events: none; }
+
   #loading-logo {
     font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: .3em;
+    font-size: 12px;
+    letter-spacing: .36em;
     color: var(--accent);
     text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
-  #loading-status {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--muted);
-    text-align: center;
-    letter-spacing: .08em;
+  #loading-logo::before {
+    content: '◈';
+    font-size: 16px;
+    animation: logo-pulse 1.6s ease-in-out infinite;
   }
+  @keyframes logo-pulse {
+    0%, 100% { opacity: .25; transform: scale(.9); }
+    50%       { opacity: .9;  transform: scale(1.05); }
+  }
+
   #loading-bar-track {
-    width: 160px;
-    height: 1px;
+    width: 180px; height: 1px;
     background: var(--border);
+    position: relative;
+    z-index: 1;
   }
+  #loading-bar-track::before,
+  #loading-bar-track::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    width: 1px; height: 7px;
+    background: var(--border-hi);
+  }
+  #loading-bar-track::before { left: 0; }
+  #loading-bar-track::after  { right: 0; }
   #loading-bar-fill {
     height: 100%;
     background: var(--accent);
     width: 0%;
     transition: width .3s ease-out;
+    box-shadow: 0 0 8px var(--accent);
+  }
+  #loading-status {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: .1em;
+    text-align: center;
+    position: relative;
+    z-index: 1;
   }
 
-  /* ── Status states (color themes) ─────────────────────── */
+  /* ── State color themes ──────────────────────────────── */
   body.state-normal    #class-label { color: var(--green); }
-  body.state-defect    #class-label { color: var(--red); }
+  body.state-defect    #class-label { color: var(--red);   }
   body.state-warn      #class-label { color: var(--amber); }
   body.state-uncertain #class-label { color: var(--muted); }
-  body.state-normal    #conf-badge  { border-color: var(--green); color: var(--green); }
-  body.state-defect    #conf-badge  { border-color: var(--red); color: var(--red); }
-  body.state-warn      #conf-badge  { border-color: var(--amber); color: var(--amber); }
-  body.state-uncertain #conf-badge  { border-color: var(--muted); color: var(--muted); }
-  body.state-normal    #conf-fill   { background: var(--green); }
-  body.state-defect    #conf-fill   { background: var(--red); }
-  body.state-warn      #conf-fill   { background: var(--amber); }
-  body.state-uncertain #conf-fill   { background: var(--muted); }
+
+  body.state-normal    #conf-badge { border-color: var(--green); color: var(--green); background: rgba(0,230,118,.06); }
+  body.state-defect    #conf-badge { border-color: var(--red);   color: var(--red);   background: rgba(255,82,82,.06); }
+  body.state-warn      #conf-badge { border-color: var(--amber); color: var(--amber); background: rgba(255,202,40,.06); }
+  body.state-uncertain #conf-badge { border-color: var(--muted); color: var(--muted); background: transparent; }
+
+  body.state-normal    #conf-fill { background: var(--green); }
+  body.state-defect    #conf-fill { background: var(--red);   }
+  body.state-warn      #conf-fill { background: var(--amber); }
+  body.state-uncertain #conf-fill { background: var(--muted); }
+
   body.state-normal    .corner { border-color: var(--green); }
-  body.state-defect    .corner { border-color: var(--red); }
+  body.state-defect    .corner { border-color: var(--red);   }
   body.state-warn      .corner { border-color: var(--amber); }
   body.state-uncertain .corner { border-color: var(--muted); }
-  body.state-normal    .bar-fill.top { background: var(--green) !important; }
-  body.state-defect    .bar-fill.top { background: var(--red) !important; }
-  body.state-warn      .bar-fill.top { background: var(--amber) !important; }
-  body.state-uncertain .bar-fill.top { background: var(--muted) !important; }
+
+  body.state-normal    .corner::after { background: var(--green); }
+  body.state-defect    .corner::after { background: var(--red);   }
+  body.state-warn      .corner::after { background: var(--amber); }
+  body.state-uncertain .corner::after { background: var(--muted); }
+
+  body.state-normal    .frame-tick { background: var(--green); opacity: .3; }
+  body.state-defect    .frame-tick { background: var(--red);   opacity: .3; }
+  body.state-warn      .frame-tick { background: var(--amber); opacity: .3; }
+  body.state-uncertain .frame-tick { background: var(--muted); opacity: .2; }
+
+  body.state-normal    #crosshair { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  body.state-defect    #crosshair { background: var(--red);   box-shadow: 0 0 8px var(--red);   }
+  body.state-warn      #crosshair { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+  body.state-uncertain #crosshair { background: var(--muted); box-shadow: none; }
+
+  body.state-normal    #status-dot { background: var(--green); box-shadow: 0 0 7px var(--green); }
+  body.state-defect    #status-dot { background: var(--red);   box-shadow: 0 0 7px var(--red);   }
+  body.state-warn      #status-dot { background: var(--amber); box-shadow: 0 0 7px var(--amber); }
+  body.state-uncertain #status-dot { background: var(--muted); box-shadow: none; }
+
+  body.state-normal    #panel-status { color: var(--green); }
+  body.state-defect    #panel-status { color: var(--red);   }
+  body.state-warn      #panel-status { color: var(--amber); }
+  body.state-uncertain #panel-status { color: var(--muted); }
+
+  body.state-normal    .bar-fill.top { background: var(--green) !important; box-shadow: 0 0 5px rgba(0,230,118,.5); }
+  body.state-defect    .bar-fill.top { background: var(--red)   !important; box-shadow: 0 0 5px rgba(255,82,82,.5);  }
+  body.state-warn      .bar-fill.top { background: var(--amber) !important; box-shadow: 0 0 5px rgba(255,202,40,.5);}
+  body.state-uncertain .bar-fill.top { background: var(--muted) !important; box-shadow: none; }
+
+  /* ── Model picker ────────────────────────────────────── */
+  #model-picker {
+    position: fixed;
+    right: 72px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(10,17,28,.97);
+    border: 1px solid var(--border-hi);
+    border-radius: 10px;
+    padding: 6px;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    backdrop-filter: blur(20px);
+    z-index: 50;
+    min-width: 168px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.6), 0 0 0 1px rgba(0,200,255,.04);
+  }
+  #model-picker.visible { display: flex; }
+
+  .picker-header {
+    font-family: var(--mono);
+    font-size: 7.5px;
+    letter-spacing: .24em;
+    color: var(--muted);
+    padding: 6px 10px 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2px;
+  }
+  .model-opt {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .06em;
+    color: var(--muted);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 9px 10px;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+    transition: border-color .15s, color .15s, background .15s;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .model-opt-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+    flex-shrink: 0;
+    transition: background .15s;
+  }
+  .model-opt:active { transform: scale(.97); }
+  .model-opt.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .model-opt.active .model-opt-dot { background: var(--accent); border-color: var(--accent); }
+
+  /* ── Model switch overlay ────────────────────────────── */
+  #model-switch-overlay {
+    position: fixed; inset: 0;
+    background: rgba(6,9,15,.88);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 90;
+    flex-direction: column;
+    gap: 18px;
+    backdrop-filter: blur(6px);
+  }
+  #model-switch-overlay.visible { display: flex; }
+  #model-switch-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: .18em;
+    text-transform: uppercase;
+  }
+  #model-switch-bar-track {
+    width: 180px; height: 1px;
+    background: var(--border);
+    position: relative;
+  }
+  #model-switch-bar-track::before,
+  #model-switch-bar-track::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    width: 1px; height: 7px;
+    background: var(--border-hi);
+  }
+  #model-switch-bar-track::before { left: 0; }
+  #model-switch-bar-track::after  { right: 0; }
+  #model-switch-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width .3s ease-out;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  /* ── Test overlay ────────────────────────────────────── */
+  #test-overlay {
+    backdrop-filter: blur(10px);
+  }
+  #test-card {
+    background: rgba(10,17,28,.98);
+    border: 1px solid var(--border-hi);
+    border-radius: 14px;
+    padding: 20px 20px 16px;
+    width: 100%;
+    max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  .test-card-title {
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: .22em;
+    color: var(--muted);
+    align-self: flex-start;
+  }
+  #test-img {
+    max-width: 260px; max-height: 260px;
+    border-radius: 8px;
+    object-fit: contain;
+    border: 1px solid var(--border-hi);
+  }
+  #test-bars { width: 100%; max-width: 300px; }
+  #test-result {
+    font-family: var(--mono);
+    font-size: 20px;
+    color: var(--text);
+    text-align: center;
+  }
+  #test-close {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .14em;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border-hi);
+    border-radius: 6px;
+    padding: 8px 28px;
+    cursor: pointer;
+    transition: border-color .2s, color .2s;
+    margin-top: 2px;
+  }
+  #test-close:active { transform: scale(.96); }
+  #test-close:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
 
 <!-- Loading -->
 <div id="loading">
-  <div id="loading-logo">Defect · Scan</div>
+  <div id="loading-logo">Defect Scan</div>
   <div id="loading-bar-track"><div id="loading-bar-fill"></div></div>
   <div id="loading-status">Initializing...</div>
 </div>
@@ -347,6 +809,9 @@
 <div id="camera-wrap">
   <video id="video" autoplay playsinline muted></video>
 </div>
+
+<!-- Ambient glow -->
+<div id="vignette"></div>
 
 <!-- Grad-CAM canvas -->
 <canvas id="gradcam-canvas" width="224" height="224"></canvas>
@@ -357,34 +822,79 @@
   <div class="corner tr"></div>
   <div class="corner bl"></div>
   <div class="corner br"></div>
+  <div class="frame-tick tick-top"></div>
+  <div class="frame-tick tick-bottom"></div>
+  <div class="frame-tick tick-left"></div>
+  <div class="frame-tick tick-right"></div>
+  <div id="crosshair"></div>
   <div id="scan-line"></div>
 </div>
 
 <!-- Top bar -->
 <div id="topbar">
-  <div id="logo">Defect · Scan <span id="version-tag" style="font-size:9px;opacity:0.5;letter-spacing:.1em"></span></div>
-  <div id="fps-counter">-- fps</div>
+  <div id="logo">
+    <div class="logo-mark">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-text">Defect · Scan</div>
+      <span id="version-tag"></span>
+    </div>
+  </div>
+  <div id="topbar-right">
+    <div id="model-badge">--</div>
+    <div id="status-indicator">
+      <div id="status-dot"></div>
+      <div id="fps-counter">-- FPS</div>
+    </div>
+  </div>
+</div>
+
+<!-- Model picker -->
+<div id="model-picker">
+  <div class="picker-header">SELECT MODEL</div>
+</div>
+
+<!-- Model switch overlay -->
+<div id="model-switch-overlay">
+  <div id="model-switch-label">Loading model...</div>
+  <div id="model-switch-bar-track"><div id="model-switch-bar-fill"></div></div>
 </div>
 
 <!-- Side buttons -->
 <div id="actions">
-  <button class="action-btn" id="btn-gradcam" title="Grad-CAM heatmap" onclick="toggleGradcam()">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-      <circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7" stroke-dasharray="2 2"/>
+  <button class="action-btn" id="btn-gradcam" title="Grad-CAM heatmap" onclick="toggleGradcam().catch(console.error)">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="12" cy="12" r="3"/>
+      <circle cx="12" cy="12" r="7" stroke-dasharray="2 2"/>
       <path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>
     </svg>
+    <span class="btn-label">HEAT</span>
   </button>
-  <button class="action-btn" id="btn-pause" title="Pause" onclick="togglePause()">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-      <rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>
+  <button class="action-btn" id="btn-pause" title="Pause inference" onclick="togglePause()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <rect x="6" y="4" width="4" height="16" rx="1"/>
+      <rect x="14" y="4" width="4" height="16" rx="1"/>
     </svg>
+    <span class="btn-label">PAUSE</span>
   </button>
-
-  <button class="action-btn" id="btn-upload" title="Upload image" onclick="document.getElementById('file-input').click()">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+  <button class="action-btn" id="btn-model" title="Switch model" onclick="toggleModelPicker()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+      <ellipse cx="12" cy="5" rx="9" ry="3"/>
+      <path d="M3 5v6c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+      <path d="M3 11v6c0 1.66 4.03 3 9 3s9-1.34 9-3v-6"/>
+    </svg>
+    <span class="btn-label">MODEL</span>
+  </button>
+  <button class="action-btn" id="btn-upload" title="Test image" onclick="document.getElementById('file-input').click()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
       <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-      <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
     </svg>
+    <span class="btn-label">TEST</span>
   </button>
 </div>
 
@@ -393,35 +903,40 @@
 <!-- Test result overlay -->
 <div id="test-overlay" style="
   display:none; position:fixed; inset:0; z-index:200;
-  background:rgba(0,0,0,0.92);
+  background:rgba(6,9,15,0.92);
   flex-direction:column; align-items:center; justify-content:center;
-  padding:20px; gap:16px;
+  padding:20px; gap:0;
 ">
-  <img id="test-img" style="
-    max-width:280px; max-height:280px;
-    border-radius:8px; object-fit:contain;
-    border:1px solid #333;
-  "/>
-  <div id="test-bars" style="width:100%; max-width:320px;"></div>
-  <div id="test-result" style="
-    font-family:var(--mono); font-size:22px;
-    color:var(--text); text-align:center;
-  "></div>
-  <button onclick="closeTest()" style="
-    font-family:var(--mono); font-size:12px;
-    color:var(--muted); background:none; border:1px solid #333;
-    border-radius:6px; padding:8px 24px; cursor:pointer;
-    letter-spacing:.1em; margin-top:4px;
-  ">Close</button>
+  <div id="test-card">
+    <div class="test-card-title">IMAGE ANALYSIS</div>
+    <img id="test-img"/>
+    <div id="test-bars"></div>
+    <div id="test-result"></div>
+    <button id="test-close" onclick="closeTest()">CLOSE</button>
+  </div>
 </div>
 
 <!-- Result card -->
 <div id="result-card">
+  <div class="panel-header">
+    <span class="panel-title">SURFACE ANALYSIS</span>
+    <span class="panel-divider"></span>
+    <span id="panel-status">SCANNING</span>
+  </div>
   <div id="label-row">
     <div id="class-label">--</div>
-    <div id="conf-badge">--%</div>
+    <div id="conf-badge">-- %</div>
   </div>
-  <div id="conf-track"><div id="conf-fill"></div></div>
+  <div class="conf-meta">
+    <span class="conf-meta-label">CONFIDENCE</span>
+    <span class="conf-meta-ticks">25 · 50 · 75</span>
+  </div>
+  <div id="conf-wrap">
+    <div class="conf-notch" style="left:25%"></div>
+    <div class="conf-notch" style="left:50%"></div>
+    <div class="conf-notch" style="left:75%"></div>
+    <div id="conf-fill"></div>
+  </div>
   <div id="class-bars"></div>
 </div>
 
@@ -438,15 +953,16 @@ ort.env.wasm.numThreads = 1
 //  State
 // ─────────────────────────────────────────────────────────────
 let session = null
+let camSession = null    // dual-output ONNX session for real CAM heatmaps
+let camLoading = false   // prevents concurrent cam session loads
 let isRunning = false
 let isPaused = false
 let showGradcam = false
-let facingMode = 'environment'
 let stream = null
 let lastFpsTime = performance.now()
 let frameCount = 0
-let lastTopIdx = -1
 let testObjectURL = null
+let _testPaused = false           // tracks whether testImage() paused inference
 let smoothedProbs = null          // EMA smoothed probabilities
 const EMA_ALPHA = 0.25            // lower = smoother but slower to react
 
@@ -459,6 +975,11 @@ const offCtx = offscreen.getContext('2d', { colorSpace: 'srgb', willReadFrequent
 const resizeCanvas = document.createElement('canvas')  // intermediate resize canvas
 const resizeCtx = resizeCanvas.getContext('2d', { colorSpace: 'srgb' })
 
+// pre-allocated preprocessing buffer — reused every frame to avoid per-frame GC pressure
+let preprocessBuf = new Float32Array(3 * CONFIG.inputSize * CONFIG.inputSize)
+// pre-allocated CAM slice buffer — resized lazily when H*W grows
+let camSliceBuf = null
+
 const video = document.getElementById('video')
 const gradcamCanvas = document.getElementById('gradcam-canvas')
 const gradcamCtx = gradcamCanvas.getContext('2d')
@@ -467,8 +988,10 @@ const gradcamCtx = gradcamCanvas.getContext('2d')
 //  Loading helpers
 // ─────────────────────────────────────────────────────────────
 function setLoadingStatus(msg, pct) {
-  document.getElementById('loading-status').textContent = msg
-  if (pct != null) document.getElementById('loading-bar-fill').style.width = pct + '%'
+  const s = document.getElementById('loading-status')
+  const b = document.getElementById('loading-bar-fill')
+  if (s) s.textContent = msg
+  if (b && pct != null) b.style.width = pct + '%'
 }
 
 function hideLoading() {
@@ -484,7 +1007,7 @@ function initBars() {
   const container = document.getElementById('class-bars')
   container.innerHTML = CONFIG.labels.map((label, i) => `
     <div class="bar-row">
-      <div class="bar-name">${CONFIG.labels[i]}</div>
+      <div class="bar-name">${label}</div>
       <div class="bar-track"><div class="bar-fill" id="bar-${i}"></div></div>
       <div class="bar-val" id="barval-${i}">0%</div>
     </div>
@@ -504,7 +1027,7 @@ async function loadModel() {
     const sess = await ort.InferenceSession.create(CONFIG.modelUrl, {
       executionProviders: ['wasm'],           // WASM is more consistent than WebGL on mobile
       externalData: [
-        { path: 'mobilenetv3small.onnx.data', data: CONFIG.modelDataUrl }
+        { path: CONFIG.modelDataFile, data: CONFIG.modelDataUrl }
       ],
     })
     setLoadingStatus('Warming up...', 70)
@@ -529,7 +1052,7 @@ async function startCamera() {
   if (stream) stream.getTracks().forEach(t => t.stop())
   const constraints = {
     video: {
-      facingMode,
+      facingMode: 'environment',
       width: { ideal: 1280 },
       height: { ideal: 720 }
     }
@@ -561,9 +1084,9 @@ function preprocessFrame() {
   offCtx.drawImage(resizeCanvas, sx, sy, size, size, 0, 0, size, size)
   const { data } = offCtx.getImageData(0, 0, size, size)  // RGBA, HWC
 
-  // convert RGBA HWC → CHW Float32 with ImageNet normalization
+  // convert RGBA HWC → CHW Float32 with ImageNet normalization (reuse buffer to avoid GC)
   const n = size * size
-  const float32 = new Float32Array(3 * n)
+  const float32 = preprocessBuf
   const [mr, mg, mb] = CONFIG.mean
   const [sr, sg, sb] = CONFIG.std
   for (let i = 0; i < n; i++) {
@@ -587,7 +1110,6 @@ async function runInference(tensor) {
   const results = await session.run({ input: tensor })
   // use first output key dynamically — avoids silent failure if model names it differently
   const logits  = Array.from(results[Object.keys(results)[0]].data)
-  console.log('logits:', logits)
   // softmax
   const maxL = Math.max(...logits)
   const exp  = logits.map(x => Math.exp(x - maxL))
@@ -596,13 +1118,26 @@ async function runInference(tensor) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Grad-CAM
+//  CAM rendering
 // ─────────────────────────────────────────────────────────────
-async function runGradCAM(classIdx) {
-  // ONNX Runtime Web does not expose intermediate gradients;
-  // real Grad-CAM needs a separate feature-extractor export.
-  // Placeholder: radial demo heatmap.
-  drawDemoHeatmap()
+
+// Render cam[classIdx] slice (shape [H,W], already [0,1] from model) using jet colormap.
+// The canvas is CSS-scaled to the scan frame size automatically.
+function drawRealCAM(camData, H, W, classIdx) {
+  const offset = classIdx * H * W
+  // camData may be a TypedArray view over WASM memory; copy the slice into a reused buffer
+  if (!camSliceBuf || camSliceBuf.length < H * W) camSliceBuf = new Float32Array(H * W)
+  const slice = camSliceBuf
+  for (let i = 0; i < H * W; i++) slice[i] = camData[offset + i]
+  // Renormalize in case model output isn't perfectly in [0,1]
+  let mn = Infinity, mx = -Infinity
+  for (let i = 0; i < slice.length; i++) {
+    if (slice[i] < mn) mn = slice[i]
+    if (slice[i] > mx) mx = slice[i]
+  }
+  const range = mx - mn || 1
+  for (let i = 0; i < slice.length; i++) slice[i] = (slice[i] - mn) / range
+  drawJetHeatmap(slice, W, H)
 }
 
 // Jet colormap renderer
@@ -623,25 +1158,11 @@ function drawJetHeatmap(data, w, h) {
     imageData.data[pi + 2] = Math.round(b * 255)
     imageData.data[pi + 3] = Math.round(v * 200 + 30)  // alpha mapped to intensity
   }
-  gradcamCanvas.width = w
-  gradcamCanvas.height = h
-  gradcamCtx.putImageData(imageData, 0, 0)
-}
-
-// Demo heatmap (radial gradient in center)
-function drawDemoHeatmap() {
-  const w = CONFIG.inputSize, h = CONFIG.inputSize
-  const data = new Float32Array(w * h)
-  const cx = w * (0.35 + Math.random() * 0.3)
-  const cy = h * (0.35 + Math.random() * 0.3)
-  const r  = Math.min(w, h) * (0.2 + Math.random() * 0.2)
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const d = Math.hypot(x - cx, y - cy)
-      data[y * w + x] = Math.max(0, 1 - d / r)
-    }
+  if (gradcamCanvas.width !== w || gradcamCanvas.height !== h) {
+    gradcamCanvas.width = w
+    gradcamCanvas.height = h
   }
-  drawJetHeatmap(data, w, h)
+  gradcamCtx.putImageData(imageData, 0, 0)
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -668,7 +1189,14 @@ function updateUI(probs) {
     isNormal  ? 'state-normal' :
     isSevere  ? 'state-defect' : 'state-warn'
 
-  // Per-class bars (show CN name)
+  // Panel status text
+  const statusEl = document.getElementById('panel-status')
+  if (statusEl) statusEl.textContent =
+    rejected  ? 'OUT OF SCOPE' :
+    isNormal  ? 'CLEAR' :
+    isSevere  ? 'ALERT' : 'CAUTION'
+
+  // Per-class bars
   probs.forEach((p, i) => {
     const fill = document.getElementById('bar-' + i)
     const val  = document.getElementById('barval-' + i)
@@ -689,7 +1217,7 @@ function updateFps() {
   const now = performance.now()
   if (now - lastFpsTime >= 1000) {
     document.getElementById('fps-counter').textContent =
-      frameCount + ' fps'
+      frameCount + ' FPS'
     frameCount = 0
     lastFpsTime = now
   }
@@ -705,8 +1233,25 @@ async function inferenceLoop() {
 
   const tensor = preprocessFrame()
 
+  let camFaulted = false
   try {
-    const rawProbs = await runInference(tensor)
+    let rawProbs, camOutput = null
+
+    if (showGradcam && camSession && !CONFIG.demoMode) {
+      // Run dual-output CAM session — one pass gives both logits and feature heatmap
+      camFaulted = true
+      const res = await camSession.run({ input: tensor })
+      camFaulted = false
+      const logits = Array.from(res.logits.data)
+      const maxL = Math.max(...logits)
+      const exp  = logits.map(x => Math.exp(x - maxL))
+      const s    = exp.reduce((a, b) => a + b, 0)
+      rawProbs   = exp.map(x => x / s)
+      camOutput  = res.cam   // ORT Tensor: [1, num_classes, H, W]
+    } else {
+      rawProbs = await runInference(tensor)
+    }
+
     // EMA smoothing to dampen per-frame camera noise
     if (!smoothedProbs) {
       smoothedProbs = rawProbs.slice()
@@ -716,12 +1261,20 @@ async function inferenceLoop() {
     const probs = smoothedProbs
     const { topIdx } = updateUI(probs)
 
-    if (showGradcam && (topIdx !== lastTopIdx || Math.random() < 0.05)) {
-      await runGradCAM(topIdx)
-      lastTopIdx = topIdx
+    if (showGradcam && camOutput) {
+      drawRealCAM(camOutput.data, camOutput.dims[2], camOutput.dims[3], topIdx)
     }
+    // No fallback heatmap — canvas stays blank until a real CAM model is loaded
   } catch (e) {
     console.error('inference error:', e)
+    // Circuit breaker: only disable CAM when the fault came from camSession.run itself
+    if (camFaulted && camSession) {
+      camSession = null
+      showGradcam = false
+      const heatBtn = document.getElementById('btn-gradcam')
+      if (heatBtn) heatBtn.classList.remove('active')
+      gradcamCanvas.classList.remove('visible')
+    }
   } finally {
     loopRunning = false
   }
@@ -733,13 +1286,59 @@ async function inferenceLoop() {
 // ─────────────────────────────────────────────────────────────
 //  Controls
 // ─────────────────────────────────────────────────────────────
-function toggleGradcam() {
+async function toggleGradcam() {
+  if (camLoading) return
   showGradcam = !showGradcam
-  document.getElementById('btn-gradcam').classList.toggle('active', showGradcam)
-  gradcamCanvas.classList.toggle('visible', showGradcam)
+  const btn = document.getElementById('btn-gradcam')
+  btn.classList.toggle('active', showGradcam)
+
   if (!showGradcam) {
+    gradcamCanvas.classList.remove('visible')
     gradcamCtx.clearRect(0, 0, gradcamCanvas.width, gradcamCanvas.height)
+    return
   }
+
+  // No CAM model configured for the current model → inform the user and toggle off
+  if (!CONFIG.camModelUrl) {
+    showGradcam = false
+    btn.classList.remove('active')
+    btn.classList.add('cam-unavailable')
+    btn.title = 'No CAM model configured for this model'
+    return
+  }
+  btn.classList.remove('cam-unavailable')
+  btn.title = 'CAM heatmap'
+
+  // Lazily load the CAM session on first enable
+  if (!camSession) {
+    camLoading = true
+    btn.disabled = true
+    btn.classList.add('cam-loading')
+    try {
+      const externalData = CONFIG.camDataUrl
+        ? [{ path: CONFIG.camDataFile, data: CONFIG.camDataUrl }]
+        : []
+      camSession = await ort.InferenceSession.create(CONFIG.camModelUrl, {
+        executionProviders: ['wasm'],
+        ...(externalData.length ? { externalData } : {}),
+      })
+      // Warm-up run so first live frame doesn't stall (especially on mobile)
+      const dummy = new ort.Tensor('float32',
+        new Float32Array(1 * 3 * CONFIG.inputSize * CONFIG.inputSize),
+        [1, 3, CONFIG.inputSize, CONFIG.inputSize])
+      await camSession.run({ input: dummy })
+    } catch (e) {
+      console.error('CAM model load failed:', e)
+      camSession = null
+      showGradcam = false
+      btn.classList.remove('active')
+    }
+    btn.classList.remove('cam-loading')
+    btn.disabled = false
+    camLoading = false
+  }
+
+  if (showGradcam) gradcamCanvas.classList.add('visible')
 }
 
 function togglePause() {
@@ -750,7 +1349,129 @@ function togglePause() {
   if (!isPaused) { smoothedProbs = null; requestAnimationFrame(inferenceLoop) }
 }
 
+// ─────────────────────────────────────────────────────────────
+//  Model picker
+// ─────────────────────────────────────────────────────────────
+let currentModelKey = MODELS[0].key
+let pickerVisible = false
 
+function updateModelBadge() {
+  const el = document.getElementById('model-badge')
+  if (el) el.textContent = CONFIG.name || CONFIG.key
+}
+
+function initModelPicker() {
+  const picker = document.getElementById('model-picker')
+  picker.querySelectorAll('.model-opt').forEach(el => el.remove())
+  MODELS.forEach(m => {
+    const btn = document.createElement('button')
+    btn.className = 'model-opt' + (m.key === currentModelKey ? ' active' : '')
+    btn.id = 'model-opt-' + m.key
+    btn.onclick = () => switchModel(m.key)
+    btn.innerHTML = `<span class="model-opt-dot"></span>${m.name}`
+    picker.appendChild(btn)
+  })
+}
+
+function toggleModelPicker() {
+  pickerVisible = !pickerVisible
+  document.getElementById('model-picker').classList.toggle('visible', pickerVisible)
+  document.getElementById('btn-model').classList.toggle('active', pickerVisible)
+}
+
+function closeModelPicker() {
+  pickerVisible = false
+  document.getElementById('model-picker').classList.remove('visible')
+  document.getElementById('btn-model').classList.remove('active')
+}
+
+async function switchModel(key) {
+  if (key === currentModelKey) { closeModelPicker(); return }
+  const def = MODELS.find(m => m.key === key)
+  if (!def) return
+
+  closeModelPicker()
+
+  // Pause inference loop
+  const wasRunning = isRunning
+  isRunning = false
+  smoothedProbs = null
+
+  // Show switch overlay
+  const overlay = document.getElementById('model-switch-overlay')
+  const label   = document.getElementById('model-switch-label')
+  const bar     = document.getElementById('model-switch-bar-fill')
+  bar.style.width = '0%'
+  overlay.classList.add('visible')
+  label.textContent = `Loading ${def.name}...`
+  bar.style.width = '20%'
+
+  // Apply new model settings to CONFIG; reset demoMode so a prior failure doesn't persist
+  CONFIG.demoMode = false
+  Object.assign(CONFIG, def)
+  currentModelKey = key
+
+  // Resize preprocessing resources to match the new model's inputSize
+  offscreen.width  = CONFIG.inputSize
+  offscreen.height = CONFIG.inputSize
+  preprocessBuf = new Float32Array(3 * CONFIG.inputSize * CONFIG.inputSize)
+
+  // Wait for any in-flight inference to finish before releasing WASM sessions
+  while (loopRunning) await new Promise(r => setTimeout(r, 16))
+
+  // Release old sessions to free WASM memory before allocating new ones
+  if (session)    { try { await session.release()    } catch (_) {} }
+  if (camSession) { try { await camSession.release() } catch (_) {} }
+  session = null
+  camSession = null
+
+  // Reset Grad-CAM toggle — new model needs its own cam session loaded on demand
+  showGradcam = false
+  const heatBtn = document.getElementById('btn-gradcam')
+  heatBtn.classList.remove('active', 'cam-unavailable')
+  heatBtn.title = CONFIG.camModelUrl ? 'CAM heatmap' : 'No CAM model configured for this model'
+  if (!CONFIG.camModelUrl) heatBtn.classList.add('cam-unavailable')
+  gradcamCanvas.classList.remove('visible')
+  gradcamCtx.clearRect(0, 0, gradcamCanvas.width, gradcamCanvas.height)
+
+  try {
+    bar.style.width = '40%'
+    const sess = await ort.InferenceSession.create(CONFIG.modelUrl, {
+      executionProviders: ['wasm'],
+      externalData: [{ path: CONFIG.modelDataFile, data: CONFIG.modelDataUrl }],
+    })
+    bar.style.width = '75%'
+    // warm-up
+    const dummy = new ort.Tensor('float32',
+      new Float32Array(1 * 3 * CONFIG.inputSize * CONFIG.inputSize),
+      [1, 3, CONFIG.inputSize, CONFIG.inputSize])
+    await sess.run({ input: dummy })
+    session = sess
+    bar.style.width = '100%'
+  } catch (e) {
+    console.error('model switch failed:', e)
+    label.textContent = 'Load failed — demo mode'
+    CONFIG.demoMode = true
+  }
+
+  // Rebuild bars for (possibly new) labels
+  initBars()
+  updateModelBadge()
+
+  // Update picker active state
+  document.querySelectorAll('.model-opt').forEach(el => {
+    el.classList.toggle('active', el.id === `model-opt-${key}`)
+  })
+
+  await new Promise(r => setTimeout(r, 250))
+  bar.style.width = '0%'
+  overlay.classList.remove('visible')
+
+  if (wasRunning) {
+    isRunning = true
+    requestAnimationFrame(inferenceLoop)
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 //  Image upload test
@@ -764,6 +1485,13 @@ async function testImage(input) {
   const imgEl   = document.getElementById('test-img')
   const resultEl = document.getElementById('test-result')
   const barsEl  = document.getElementById('test-bars')
+
+  // Pause live inference while the test overlay is open
+  if (!isPaused) {
+    _testPaused = true
+    isPaused = true
+    document.getElementById('scan-line').style.animationPlayState = 'paused'
+  }
 
   if (testObjectURL) { URL.revokeObjectURL(testObjectURL) }
   testObjectURL = URL.createObjectURL(file)
@@ -817,25 +1545,11 @@ async function testImage(input) {
     float32[i + n * 2] = (data[i * 4 + 2] / 255 - mb) / sb
   }
   const tensor = new ort.Tensor('float32', float32, [1, 3, size, size])
-  {
-    let _min = Infinity, _max = -Infinity, _sum = 0
-    for (let i = 0; i < float32.length; i++) {
-      if (float32[i] < _min) _min = float32[i]
-      if (float32[i] > _max) _max = float32[i]
-      _sum += float32[i]
-    }
-    console.log('tensor stats:',
-      'min=', _min,
-      'max=', _max,
-      'mean=', _sum / float32.length,
-      'first10=', Array.from(float32.slice(0, 10))
-    )
-  }
 
+  // Use the regular session — CAM overlay is meaningless here (no canvas in the test view)
   let probs
   try {
     probs = await runInference(tensor)
-    console.log('[testImage] probs:', CONFIG.labels.map((l, i) => `${l}:${(probs[i]*100).toFixed(1)}%`))
   } catch (e) {
     resultEl.textContent = 'Inference failed: ' + e.message
     console.error('[testImage] error:', e)
@@ -854,7 +1568,7 @@ async function testImage(input) {
   resultEl.innerHTML = `
     <span style="color:${color}">${displayLabel}</span>
     <span style="font-size:14px;color:${color};margin-left:8px">${Math.round(conf*100)}%</span>
-    ${rejected ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;letter-spacing:.05em">MSP ${Math.round(conf*100)}% &lt; threshold ${Math.round(CONFIG.mspThreshold*100)}%</div>` : ''}
+    ${rejected ? `<div style="font-size:10px;color:var(--muted);margin-top:6px;letter-spacing:.06em;font-family:var(--mono)">MSP ${Math.round(conf*100)}% &lt; threshold ${Math.round(CONFIG.mspThreshold*100)}%</div>` : ''}
   `
 
   const sorted = probs
@@ -862,12 +1576,12 @@ async function testImage(input) {
     .sort((a, b) => b.p - a.p)
 
   barsEl.innerHTML = sorted.map(({ p, i }) => `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-      <div style="font-family:var(--mono);font-size:11px;color:var(--muted);width:52px;flex-shrink:0">${CONFIG.labels[i]}</div>
-      <div style="flex:1;height:3px;background:#222;border-radius:2px;overflow:hidden">
-        <div style="height:100%;width:${Math.round(p*100)}%;background:${i===topIdx?color:'#444'};border-radius:2px"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+      <div style="font-family:var(--mono);font-size:9px;letter-spacing:.07em;color:var(--muted);width:56px;flex-shrink:0;text-transform:uppercase">${CONFIG.labels[i]}</div>
+      <div style="flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden">
+        <div style="height:100%;width:${Math.round(p*100)}%;background:${i===topIdx?color:'var(--border-hi)'};border-radius:2px"></div>
       </div>
-      <div style="font-family:var(--mono);font-size:11px;color:var(--muted);width:34px;text-align:right">${Math.round(p*100)}%</div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);width:30px;text-align:right">${Math.round(p*100)}%</div>
     </div>
   `).join('')
 }
@@ -875,6 +1589,13 @@ async function testImage(input) {
 function closeTest() {
   document.getElementById('test-overlay').style.display = 'none'
   if (testObjectURL) { URL.revokeObjectURL(testObjectURL); testObjectURL = null }
+  if (_testPaused) {
+    _testPaused = false
+    isPaused = false
+    document.getElementById('scan-line').style.animationPlayState = 'running'
+    smoothedProbs = null
+    requestAnimationFrame(inferenceLoop)
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -882,8 +1603,16 @@ function closeTest() {
 // ─────────────────────────────────────────────────────────────
 async function boot() {
   initBars()
+  initModelPicker()
+  updateModelBadge()
   document.getElementById('version-tag').textContent = CONFIG.version
-  setLoadingStatus('Requesting camera permission...', 10)
+  // Reflect initial cam availability on the HEAT button
+  if (!CONFIG.camModelUrl) {
+    const hb = document.getElementById('btn-gradcam')
+    hb.classList.add('cam-unavailable')
+    hb.title = 'No CAM model configured for this model'
+  }
+  setLoadingStatus('Requesting camera...', 10)
 
   try {
     await startCamera()
