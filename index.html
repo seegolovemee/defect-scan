@@ -494,7 +494,14 @@
   .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
   .action-btn.cam-loading svg { animation: btn-spin 1s linear infinite; }
   @keyframes btn-spin { to { transform: rotate(360deg); } }
-  .action-btn.cam-unavailable { opacity: 0.4; cursor: not-allowed; }
+  .action-btn.cam-shake { animation: btn-shake .35s ease; }
+  @keyframes btn-shake {
+    0%,100% { transform: translateX(0); }
+    20%      { transform: translateX(-4px); }
+    40%      { transform: translateX(4px); }
+    60%      { transform: translateX(-3px); }
+    80%      { transform: translateX(3px); }
+  }
   .action-btn.active {
     border-color: var(--accent);
     color: var(--accent);
@@ -1298,16 +1305,15 @@ async function toggleGradcam() {
     return
   }
 
-  // No CAM model configured for the current model → inform the user and toggle off
+  // No CAM model configured for the current model → shake the button and explain
   if (!CONFIG.camModelUrl) {
     showGradcam = false
     btn.classList.remove('active')
-    btn.classList.add('cam-unavailable')
-    btn.title = 'No CAM model configured for this model'
+    btn.classList.remove('cam-shake')
+    void btn.offsetWidth  // force reflow to restart animation
+    btn.classList.add('cam-shake')
     return
   }
-  btn.classList.remove('cam-unavailable')
-  btn.title = 'CAM heatmap'
 
   // Lazily load the CAM session on first enable
   if (!camSession) {
@@ -1427,10 +1433,7 @@ async function switchModel(key) {
 
   // Reset Grad-CAM toggle — new model needs its own cam session loaded on demand
   showGradcam = false
-  const heatBtn = document.getElementById('btn-gradcam')
-  heatBtn.classList.remove('active', 'cam-unavailable')
-  heatBtn.title = CONFIG.camModelUrl ? 'CAM heatmap' : 'No CAM model configured for this model'
-  if (!CONFIG.camModelUrl) heatBtn.classList.add('cam-unavailable')
+  document.getElementById('btn-gradcam').classList.remove('active', 'cam-shake')
   gradcamCanvas.classList.remove('visible')
   gradcamCtx.clearRect(0, 0, gradcamCanvas.width, gradcamCanvas.height)
 
@@ -1606,12 +1609,6 @@ async function boot() {
   initModelPicker()
   updateModelBadge()
   document.getElementById('version-tag').textContent = CONFIG.version
-  // Reflect initial cam availability on the HEAT button
-  if (!CONFIG.camModelUrl) {
-    const hb = document.getElementById('btn-gradcam')
-    hb.classList.add('cam-unavailable')
-    hb.title = 'No CAM model configured for this model'
-  }
   setLoadingStatus('Requesting camera...', 10)
 
   try {
